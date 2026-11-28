@@ -34,3 +34,74 @@ body {
   color: var(--fg);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+.range {
+  --fill: 0%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+.range:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.range:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 9999px;
+}
+
+.range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--fill),
+    color-mix(in srgb, var(--fg) 18%, transparent) var(--fill)
+  );
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--fg);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.range::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--fg) 18%, transparent);
+}
+.range::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--accent);
+}
+.range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--fg);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.range:hover::-webkit-slider-thumb,
+.range:focus-visible::-webkit-slider-thumb,
+.range:hover::-moz-range-thumb,
+.range:focus-visible::-moz-range-thumb {
+  opacity: 1;
+}
+@media (hover: none) {
+  .range::-webkit-slider-thumb,
+  .range::-moz-range-thumb {
+    opacity: 1;
+  }
+}
