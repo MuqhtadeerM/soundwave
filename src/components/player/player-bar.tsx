@@ -1,7 +1,10 @@
 "use client";
 
+import { ListMusic } from "lucide-react";
 import { Artwork } from "@/components/ui/artwork";
+import { IconButton } from "@/components/ui/icon-button";
 import { selectCurrentTrack, usePlayerStore } from "@/store/player-store";
+import { useUiStore } from "@/store/ui-store";
 import { PlaybackControls } from "./playback-controls";
 import { SeekBar } from "./seek-bar";
 import { VolumeControl } from "./volume-control";
@@ -17,6 +20,21 @@ function ProgressLine() {
   );
 }
 
+function QueueToggle() {
+  const open = useUiStore((s) => s.queueOpen);
+  const toggle = useUiStore((s) => s.toggleQueue);
+  return (
+    <IconButton
+      label="Queue"
+      active={open}
+      aria-pressed={open}
+      onClick={toggle}
+    >
+      <ListMusic className="size-5" aria-hidden />
+    </IconButton>
+  );
+}
+
 export function PlayerBar() {
   const track = usePlayerStore(selectCurrentTrack);
   const status = usePlayerStore((s) => s.status);
@@ -26,8 +44,9 @@ export function PlayerBar() {
 
   if (!track) {
     return (
-      <div className="hidden h-20 shrink-0 items-center justify-center border-t border-border bg-surface text-sm text-muted md:flex">
-        Pick a track to start listening
+      <div className="hidden h-20 shrink-0 items-center justify-between border-t border-border bg-surface px-4 text-sm text-muted md:flex">
+        <span className="mx-auto">Pick a track to start listening</span>
+        <QueueToggle />
       </div>
     );
   }
@@ -54,7 +73,7 @@ export function PlayerBar() {
         </div>
       ) : null}
       <ProgressLine />
-      <div className="grid grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 md:grid-cols-[1fr_minmax(0,2fr)_1fr] md:px-4 md:py-3">
+      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3 py-2 md:grid-cols-[1fr_minmax(0,2fr)_1fr] md:px-4 md:py-3">
         <div className="flex min-w-0 items-center gap-3">
           <Artwork
             src={track.coverUrl}
@@ -74,7 +93,12 @@ export function PlayerBar() {
           </div>
         </div>
 
-        <div className="hidden justify-end md:flex">
+        <div className="md:hidden">
+          <QueueToggle />
+        </div>
+
+        <div className="hidden items-center justify-end gap-1 md:flex">
+          <QueueToggle />
           <VolumeControl />
         </div>
       </div>

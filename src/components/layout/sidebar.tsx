@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { AudioWaveform, ChevronsLeft, ChevronsRight, Plus } from "lucide-react";
+import { AudioWaveform, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { NAV_ITEMS } from "@/components/navigation/nav-items";
 import { NavLink } from "@/components/navigation/nav-link";
+import { CreatePlaylistButton } from "@/components/playlists/create-playlist-button";
+import { SidebarPlaylists } from "@/components/playlists/sidebar-playlists";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { useUiStore } from "@/store/ui-store";
 import { cn } from "@/lib/utils/cn";
+import { useUiStore } from "@/store/ui-store";
 
 export function Sidebar() {
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
@@ -44,28 +46,14 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-2 border-t border-border pt-4">
-        {/* Phase 3 turns this into a real "create playlist" action */}
-        <Link
-          href="/playlists"
-          title={collapsed ? "Create playlist" : undefined}
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-surface-2"
-        >
-          <span className="grid size-5 shrink-0 place-items-center rounded-md bg-fg text-bg">
-            <Plus className="size-4" aria-hidden />
-          </span>
-          <span className={cn(collapsed && "sr-only")}>Create Playlist</span>
-        </Link>
-        {!collapsed ? (
-          <p className="px-3 pt-3 text-xs text-muted">
-            Your playlists will appear here.
-          </p>
-        ) : null}
+      <div className="flex min-h-0 flex-1 flex-col gap-2 border-t border-border pt-4">
+        <CreatePlaylistButton collapsed={collapsed} />
+        <SidebarPlaylists collapsed={collapsed} />
       </div>
 
       <div
         className={cn(
-          "mt-auto flex items-center gap-1",
+          "flex items-center gap-1",
           collapsed ? "flex-col" : "justify-between",
         )}
       >
