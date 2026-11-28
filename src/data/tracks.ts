@@ -42,6 +42,13 @@ const SEEDS: readonly TrackSeed[] = [
   },
 ];
 
+const TRACK_BY_ID: ReadonlyMap<string, Track> = new Map(
+  TRACKS.map((t) => [t.id, t]),
+);
+
+export const getTrackById = (id: string): Track | undefined =>
+  TRACK_BY_ID.get(id);
+
 export const TRACKS: readonly Track[] = SEEDS.map((seed, i) => {
   const album = ALBUMS.find((a) => a.id === seed.albumId);
   const artist = album

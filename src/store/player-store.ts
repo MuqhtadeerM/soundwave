@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { getAudio, tryPlay } from "@/lib/audio/audio-engine";
+import { moveItem } from "@/lib/utils/array";
+import { makeUid } from "@/lib/utils/id";
 import type { Track } from "@/types/music";
-import type { PlayerStatus, RepeatMode } from "@/types/player";
+import type { PlayerStatus, QueueItem, RepeatMode } from "@/types/player";
 
 interface PlayerState {
-  queue: Track[];
+  queue: QueueItem[];
   currentIndex: number; // -1 when nothing is loaded
   isPlaying: boolean; // user intent; the controller applies it to the audio element
   status: PlayerStatus;
@@ -21,6 +23,13 @@ interface PlayerState {
 
 interface PlayerActions {
   playQueue: (tracks: readonly Track[], startIndex?: number) => void;
+  playShuffled: (tracks: readonly Track[]) => void;
+  playQueueIndex: (index: number) => void;
+  addToQueue: (track: Track) => void;
+  playNext: (track: Track) => void;
+  removeFromQueue: (uid: string) => void;
+  clearQueue: () => void;
+  moveQueueItem: (from: number, to: number) => void;
   togglePlay: () => void;
   next: () => void;
   previous: () => void;
@@ -50,6 +59,35 @@ const REPEAT_ORDER: readonly RepeatMode[] = ["off", "all", "one"];
 const clamp = (n: number, min: number, max: number): number =>
   Math.min(Math.max(n, min), max);
 
+const toItems = (tracks: readonly Track[]): QueueItem[] =>
+  tracks.map((track) => ({ uid: makeUid(), track }));
+
+function isTrack(v: unknown): v is Track {
+  if (typeof v !== "object" || v === null) return false;
+  const t = v as Record<string, unknown>;
+  const strings = [
+    "id",
+    "title",
+    "artistId",
+    "artistName",
+    "albumId",
+    "albumTitle",
+    "coverUrl",
+    "src",
+    "genre",
+  ];
+  return (
+    strings.every((k) => typeof t[k] === "string") &&
+    typeof t.duration === "number"
+  );
+}
+
+function isQueueItem(v: unknown): v is QueueItem {
+  if (typeof v !== "object" || v === null) return false;
+  const r = v as Record<string, unknown>;
+  return typeof r.uid === "string" && isTrack(r.track);
+}
+
 function resolveNextIndex(
   s: Pick<PlayerState, "queue" | "currentIndex" | "shuffle" | "repeat">,
 ): number | null {
@@ -65,9 +103,14 @@ function resolveNextIndex(
   return s.repeat === "all" ? 0 : null;
 }
 
-const startAt = (s: PlayerState, index: number): Partial<PlayerState> => ({
+/** Point the player at a queue index. `playing` = start playback immediately. */
+const startAt = (
+  s: PlayerState,
+  index: number,
+  playing = true,
+): Partial<PlayerState> => ({
   currentIndex: index,
-  isPlaying: true,
+  isPlaying: playing,
   currentTime: 0,
   duration: 0,
   status: "loading",
@@ -76,7 +119,7 @@ const startAt = (s: PlayerState, index: number): Partial<PlayerState> => ({
 });
 
 export const selectCurrentTrack = (s: PlayerStore): Track | null =>
-  s.queue[s.currentIndex] ?? null;
+  s.queue[s.currentIndex]?.track ?? null;
 
 export const usePlayerStore = create<PlayerStore>()(
   persist(
@@ -97,8 +140,90 @@ export const usePlayerStore = create<PlayerStore>()(
       playQueue: (tracks, startIndex = 0) => {
         if (tracks.length === 0) return;
         const index = clamp(startIndex, 0, tracks.length - 1);
-        set((s) => ({ queue: [...tracks], ...startAt(s, index) }));
+        set((s) => ({ queue: toItems(tracks), ...startAt(s, index) }));
       },
+
+      playShuffled: (tracks) => {
+        if (tracks.length === 0) return;
+        const index = Math.floor(Math.random() * tracks.length);
+        set((s) => ({
+          shuffle: true,
+          queue: toItems(tracks),
+          ...startAt(s, index),
+        }));
+      },
+
+      playQueueIndex: (index) => {
+        if (index < 0 || index >= get().queue.length) return;
+        set((s) => startAt(s, index));
+      },
+
+      addToQueue: (track) =>
+        set((s) => {
+          const queue = [...s.queue, { uid: makeUid(), track }];
+          // Nothing loaded yet: load the first item, paused
+          return s.currentIndex === -1
+            ? { queue, ...startAt(s, 0, false) }
+            : { queue };
+        }),
+
+      playNext: (track) =>
+        set((s) => {
+          const item: QueueItem = { uid: makeUid(), track };
+          if (s.currentIndex === -1) {
+            return { queue: [item, ...s.queue], ...startAt(s, 0, false) };
+          }
+          const queue = [...s.queue];
+          queue.splice(s.currentIndex + 1, 0, item);
+          return { queue };
+        }),
+
+      removeFromQueue: (uid) =>
+        set((s) => {
+          const idx = s.queue.findIndex((i) => i.uid === uid);
+          if (idx === -1) return {};
+          const queue = s.queue.filter((i) => i.uid !== uid);
+
+          if (queue.length === 0) {
+            return {
+              queue,
+              currentIndex: -1,
+              isPlaying: false,
+              status: "idle" as PlayerStatus,
+              errorMessage: null,
+              currentTime: 0,
+              duration: 0,
+            };
+          }
+          if (idx < s.currentIndex)
+            return { queue, currentIndex: s.currentIndex - 1 };
+          if (idx > s.currentIndex) return { queue };
+
+          // Removed the current item: the next one takes its place.
+          // If it was the last, land on the new last item, paused.
+          const hasNext = idx < queue.length;
+          const newIndex = hasNext ? idx : queue.length - 1;
+          return { queue, ...startAt(s, newIndex, s.isPlaying && hasNext) };
+        }),
+
+      // Keeps the playing track, drops everything else
+      clearQueue: () =>
+        set((s) => {
+          const current = s.queue[s.currentIndex];
+          return current
+            ? { queue: [current], currentIndex: 0 }
+            : { queue: [], currentIndex: -1 };
+        }),
+
+      moveQueueItem: (from, to) =>
+        set((s) => {
+          const currentUid = s.queue[s.currentIndex]?.uid;
+          const queue = moveItem(s.queue, from, to);
+          const currentIndex = currentUid
+            ? queue.findIndex((i) => i.uid === currentUid)
+            : -1;
+          return { queue, currentIndex };
+        }),
 
       togglePlay: () => {
         const s = get();
@@ -174,8 +299,7 @@ export const usePlayerStore = create<PlayerStore>()(
       },
 
       retry: () => {
-        const s = get();
-        if (!selectCurrentTrack(s)) return;
+        if (!selectCurrentTrack(get())) return;
         set((cur) => startAt(cur, cur.currentIndex));
       },
 
@@ -204,7 +328,8 @@ export const usePlayerStore = create<PlayerStore>()(
       merge: (persisted, current) => {
         const p = persisted as Partial<PersistedPlayer> | undefined;
         if (!p) return current;
-        const queue = Array.isArray(p.queue) ? p.queue : [];
+        const raw: unknown = p.queue;
+        const queue = Array.isArray(raw) && raw.every(isQueueItem) ? raw : [];
         const index =
           typeof p.currentIndex === "number" &&
           p.currentIndex >= 0 &&
